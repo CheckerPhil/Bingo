@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bingo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4efe4; --card:#fbf8f1; --ink:#1d1b17; --muted:#6e6858; --line:#d9cfbb;
+  --red:#c8382b; --redbg:#f6dcd6; --gold:#e7b53c;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#161512; --card:#201e1a; --ink:#f1ece0; --muted:#a39c89; --line:#3a362e; --red:#ef6a5b; --redbg:#3b231f; --gold:#e7b53c;}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.brand{font-family:Fraunces,Georgia,serif;font-weight:800;font-size:2rem;letter-spacing:-.02em}
+.brand span{color:var(--red)}
+.linkbtn{font:inherit;font-size:.8rem;background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;margin-left:8px}
+.chip{font-size:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border:1.5px solid var(--ink);border-radius:99px;padding:3px 10px}
+nav{display:flex;gap:6px;margin-bottom:16px}
+nav button{font:inherit;font-weight:600;font-size:.9rem;background:none;border:0;border-bottom:3px solid transparent;padding:6px 4px;margin-right:12px;color:var(--muted);cursor:pointer}
+nav button.on{color:var(--ink);border-color:var(--red)}
+.panel{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+h2{font-family:Fraunces,Georgia,serif;font-weight:800;font-size:1.5rem;margin:0 0 8px;letter-spacing:-.01em}
+h3{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:1.15rem;margin:0 0 10px}
+label{display:block;font-weight:600;font-size:.85rem;margin-bottom:12px}
+input[type=text],select,textarea{display:block;width:100%;margin-top:4px;font:inherit;font-weight:400;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:9px 11px}
+textarea{resize:vertical;min-height:200px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--red);outline-offset:1px}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.row>label{flex:1;min-width:160px}
+.chk{display:flex;align-items:center;gap:8px;font-weight:500;padding-bottom:10px}
+.chk input{width:18px;height:18px;accent-color:var(--red)}
+.hint{color:var(--muted);font-size:.85rem;margin:6px 0 12px}
+.btn{font:inherit;font-weight:600;font-size:.95rem;border:1.5px solid var(--ink);background:transparent;color:var(--ink);border-radius:9px;padding:9px 16px;cursor:pointer;margin:0 8px 8px 0}
+.btn:hover{background:var(--line)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.primary:hover{opacity:.88}
+.btn.big{font-size:1.1rem;padding:13px 26px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.warn{border-color:var(--red);color:var(--red)}
+#notice{margin-bottom:12px}
+.note{background:var(--redbg);border-left:4px solid var(--red);padding:10px 14px;border-radius:6px;font-size:.9rem;margin-bottom:10px}
+.center{text-align:center;padding:34px 18px}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:12px}
+/* Karte */
+.grid{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:6px;max-width:520px;margin:0 auto}
+.cell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;
+  background:var(--paper);border:1.5px solid var(--line);border-radius:8px;font-size:var(--fs,.9rem);font-weight:500;line-height:1.15;
+  hyphens:auto;overflow-wrap:anywhere;overflow:hidden}
+.cell span{position:relative;z-index:1}
+.cell.joker{font-weight:800;letter-spacing:.05em;font-family:Fraunces,serif}
+.cell.marked{background:var(--redbg);border-color:var(--red)}
+.cell.marked::after{content:"";position:absolute;inset:10%;border:3px solid var(--red);border-radius:52% 48% 55% 45%/48% 54% 46% 52%;transform:rotate(-8deg);opacity:.9;animation:stamp .25s ease-out}
+.cell.win{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.cell.win::after{border-color:var(--gold)}
+@keyframes stamp{from{transform:rotate(-8deg) scale(1.6);opacity:0}to{transform:rotate(-8deg) scale(1);opacity:.9}}
+.grid.mini{gap:3px;max-width:100%;margin:10px 0 4px}
+.grid.mini .cell{font-size:.5rem;padding:2px;border-radius:5px;border-width:1px}
+.grid.mini .cell.marked::after{border-width:2px}
+.banner{font-family:Fraunces,serif;font-weight:800;font-size:2.2rem;text-align:center;color:var(--red);margin:4px 0 12px;transform:rotate(-2deg)}
+.progress{text-align:center;color:var(--muted);font-size:.9rem;margin-top:14px}
+/* Admin live */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{position:relative;font:inherit;font-size:.9rem;font-weight:500;background:var(--paper);color:var(--ink);border:1.5px solid var(--line);border-radius:99px;padding:6px 14px;cursor:pointer}
+.chips button:hover{border-color:var(--ink)}
+.chips button.drawn{background:var(--redbg);border-color:var(--red);color:var(--red);text-decoration:line-through;text-decoration-thickness:2px}
+.chips button.drawn::before{content:"✓ ";text-decoration:none;display:inline-block}
+.prow{border-top:1px solid var(--line);padding:8px 0}
+.prow:first-child{border-top:0}
+.phead{width:100%;display:flex;align-items:center;gap:12px;background:none;border:0;font:inherit;color:inherit;cursor:pointer;text-align:left;padding:2px 0}
+.pname{flex:0 0 36%;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--red)}
+.pnum{font-size:.8rem;color:var(--muted);min-width:42px;text-align:right}
+.badge{background:var(--red);color:#fff;font-weight:800;font-size:.7rem;letter-spacing:.06em;padding:2px 8px;border-radius:99px}
+.prow.bingo .pname{color:var(--red)}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:99px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:9}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="brand">Bingo<span>.</span></div><div id="who" style="display:flex;align-items:center"></div></header>
+  <nav id="tabs"></nav>
+  <div id="notice"></div>
+  <main id="main"><p class="hint">Lade …</p></main>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInAnonymously,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getDatabase,ref,onValue,set,update} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+
+/* === HIER DEINE FIREBASE-WERTE EINTRAGEN (siehe README.md) === */
+const firebaseConfig = {
+  apiKey: "AIzaSyAro_3QSvtByb5KSewAXRM9p_fYgqLtzus",
+  authDomain: "bingo-cc522.firebaseapp.com",
+  databaseURL: "https://bingo-cc522-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "bingo-cc522",
+  storageBucket: "bingo-cc522.firebasestorage.app",
+  messagingSenderId: "473742430394",
+  appId: "1:473742430394:web:bcadf9deadb756595fb283"
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S = {db:null, auth:null, uid:null, admin:false, bingo:null, bingoLoaded:false, card:null, cardLoaded:false,
+           cards:[], tab:'main', draft:null, expanded:new Set(), unsaved:false, mode:null, endArmed:false,
+           showLogin:false, unsubs:[]};
+const DEFAULT_DRAFT = {title:'', size:5, joker:true, itemsText:''};
+
+/* ---------- Helfer ---------- */
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3200);}
+function notice(html){$('#notice').innerHTML = html ? '<div class="note">'+html+'</div>' : '';}
+let q = Promise.resolve();
+function enqueue(fn){q = q.then(fn).catch(e=>toast('Speichern fehlgeschlagen'+(e&&e.code?' ('+e.code+')':''))); return q;}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function needed(size,joker){return size*size-((joker&&size%2===1)?1:0);}
+function parseItems(text){const seen=new Set(),out=[];for(const l of text.split('\n')){const t=l.trim().slice(0,80);if(t&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t);}}return out.slice(0,200);}
+function normBingo(v){return v?Object.assign({title:'',size:5,joker:false,status:'setup',round:0},v,{items:v.items||[],drawn:v.drawn||[]}):null;}
+
+/* Joker-Feld = -1 (die Realtime Database speichert keine null-Werte in Listen) */
+function lineSets(n){
+  const L=[],r=[...Array(n).keys()];
+  r.forEach(a=>L.push(r.map(b=>a*n+b)));
+  r.forEach(a=>L.push(r.map(b=>b*n+a)));
+  L.push(r.map(i=>i*n+i)); L.push(r.map(i=>i*n+(n-1-i)));
+  return L;
+}
+function evalCard(card,drawn){
+  const d=new Set(drawn||[]);
+  const m=card.cells.map(c=>c<0||d.has(c));
+  const done=lineSets(card.size).filter(l=>l.every(i=>m[i]));
+  return {m, lines:done.length, win:new Set(done.flat()),
+          count:card.cells.filter((c,i)=>c>=0&&m[i]).length, total:card.cells.filter(c=>c>=0).length};
+}
+function buildCard(b,name){
+  const n=b.size,total=n*n,useJoker=b.joker&&n%2===1,need=needed(n,b.joker);
+  const cells=shuffle(b.items.map((_,i)=>i)).slice(0,need);
+  if(useJoker)cells.splice((total-1)/2,0,-1);
+  return {name,size:n,cells,round:b.round,joined:Date.now()};
+}
+function gridHTML(card,b,e,mini){
+  const fs=mini?0.5:({3:1.1,4:0.95,5:0.82}[card.size]||0.9);
+  return '<div class="grid'+(mini?' mini':'')+'" style="--n:'+card.size+';--fs:'+fs+'rem">'+
+    card.cells.map((c,i)=>{
+      const joker=c<0, txt=joker?'FREI':(b.items[c]!=null?b.items[c]:'?');
+      return '<div class="cell'+(e.m[i]?' marked':'')+(e.win.has(i)?' win':'')+(joker?' joker':'')+'" title="'+esc(txt)+'"><span>'+esc(txt)+'</span></div>';
+    }).join('')+'</div>';
+}
+
+/* ---------- Datenbank-Adapter (Firebase Realtime Database) ---------- */
+function makeDb(fdb){
+  return {
+    node(path){
+      const r=ref(fdb,path);
+      return {
+        onSnapshot:(next,err)=>onValue(r,s=>next({exists:s.exists(),data:()=>s.val()}),err),
+        set:d=>set(r,d),
+        update:d=>update(r,d)
+      };
+    },
+    list(path,next,err){
+      return onValue(ref(fdb,path),s=>{const out=[];s.forEach(c=>{out.push(Object.assign({},c.val(),{id:c.key}));});next(out);},err);
+    }
+  };
+}
+
+/* ---------- Modus & Rendering ---------- */
+function myCard(){const c=S.card;return (c&&Array.isArray(c.cells)&&S.bingo&&c.round===S.bingo.round)?c:null;}
+function modeKey(){
+  if(S.showLogin)return 'login';
+  if(!S.bingoLoaded||!S.cardLoaded)return 'load';
+  const b=S.bingo, running=b&&b.status==='running';
+  if(S.admin&&S.tab==='main')return running?'a-live':'a-setup';
+  if(!running)return 'p-wait';
+  return myCard()?'p-card':'p-join';
+}
+function refresh(){
+  const k=modeKey();
+  if(k!==S.mode){S.mode=k;renderMain();}
+  else updateParts();
+}
+function renderShell(){
+  $('#who').innerHTML = S.uid ? '<span class="chip">'+(S.admin?'Admin':'Spieler')+'</span><button class="linkbtn" id="bAuth">'+(S.admin?'Abmelden':'Admin-Login')+'</button>' : '';
+  $('#tabs').innerHTML = S.admin ? '<button data-tab="main" class="'+(S.tab==='main'?'on':'')+'">Verwaltung</button><button data-tab="card" class="'+(S.tab==='card'?'on':'')+'">Meine Karte</button>' : '';
+  const a=$('#bAuth');
+  if(a)a.onclick=()=>{
+    if(S.admin){signOut(S.auth);}
+    else{S.showLogin=!S.showLogin;S.mode=null;refresh();}
+  };
+}
+$('#tabs').addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab]');if(!t)return;
+  S.tab=t.dataset.tab;S.mode=null;renderShell();refresh();
+});
+
+function renderMain(){
+  const main=$('#main'),b=S.bingo;
+  switch(S.mode){
+    case 'load': main.innerHTML='<p class="hint">Lade …</p>'; break;
+    case 'login':
+      main.innerHTML='<section class="panel"><h2>Admin-Login</h2><label>E-Mail<input type="text" id="lMail" autocomplete="username"></label>'+
+        '<label>Passwort<input type="password" id="lPass" autocomplete="current-password" style="display:block;width:100%;margin-top:4px;font:inherit;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:9px 11px"></label>'+
+        '<button class="btn primary" id="bLogin">Anmelden</button><button class="btn" id="bCancel">Abbrechen</button></section>';
+      $('#bLogin').onclick=doLogin;
+      $('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+      $('#bCancel').onclick=()=>{S.showLogin=false;S.mode=null;refresh();};
+      break;
+    case 'p-wait':
+      main.innerHTML='<section class="panel center"><h2>'+(b&&b.title?esc(b.title):'Noch kein Bingo')+'</h2><p class="meta">'+
+        (S.admin?'Starte unter „Verwaltung“ ein Bingo, dann kannst du hier auch selbst mitspielen.':'Das Bingo läuft noch nicht. Diese Seite aktualisiert sich automatisch, sobald der Admin startet.')+'</p></section>';
+      break;
+    case 'p-join': {
+      const saved=(function(){try{return localStorage.getItem('bingo-name')||'';}catch(e){return '';}})();
+      main.innerHTML='<section class="panel center"><h2>'+esc(b.title||'Bingo')+'</h2><p class="meta">'+b.size+'×'+b.size+' · '+b.items.length+' Begriffe im Topf. Deine Karte wird zufällig aus dem Topf gemischt und gehört dann dir.</p>'+
+        '<label style="max-width:320px;margin:0 auto 18px;text-align:left">Dein Name<input type="text" id="jName" maxlength="30" autocomplete="nickname" value="'+esc(saved)+'"></label>'+
+        '<button class="btn primary big" id="bJoin">Karte ziehen</button></section>';
+      $('#bJoin').onclick=joinGame;
+      $('#jName').addEventListener('keydown',e=>{if(e.key==='Enter')joinGame();});
+      break; }
+    case 'p-card':
+      main.innerHTML='<section class="panel"><h2 style="text-align:center">'+esc(b.title||'Bingo')+'</h2><div id="cardBox"></div></section>';
+      renderCard(); break;
+    case 'a-setup': renderSetup(); break;
+    case 'a-live':
+      main.innerHTML='<section class="panel"><h2>'+esc(b.title||'Bingo')+'</h2><div class="meta" id="lMeta"></div>'+
+        '<button class="btn primary" id="bRandom">Zufällig ziehen</button><button class="btn warn" id="bEnd">Bingo beenden</button>'+
+        '<p class="hint">Begriff antippen = abhaken, nochmal antippen = zurücknehmen. Die Karten der Spieler aktualisieren sich sofort.</p>'+
+        '<div class="chips" id="drawn"></div></section>'+
+        '<section class="panel"><h3>Spieler <span id="pCount"></span></h3><div id="players"></div></section>';
+      $('#bRandom').onclick=drawRandom;
+      $('#bEnd').onclick=endGame;
+      $('#drawn').onclick=e=>{const t=e.target.closest('[data-i]');if(t)toggleDrawn(+t.dataset.i);};
+      $('#players').onclick=e=>{const t=e.target.closest('[data-uid]');if(!t)return;const id=t.dataset.uid;S.expanded.has(id)?S.expanded.delete(id):S.expanded.add(id);renderPlayers();};
+      renderDrawn();renderPlayers(); break;
+  }
+}
+function updateParts(){
+  if(S.mode==='a-live'){renderDrawn();renderPlayers();}
+  else if(S.mode==='p-card')renderCard();
+}
+async function doLogin(){
+  const mail=$('#lMail').value.trim(),pw=$('#lPass').value;
+  if(!mail||!pw)return;
+  $('#bLogin').disabled=true;
+  try{await signInWithEmailAndPassword(S.auth,mail,pw);S.showLogin=false;}
+  catch(e){toast('Login fehlgeschlagen'+(e&&e.code?' ('+e.code.replace('auth/','')+')':''));const b=$('#bLogin');if(b)b.disabled=false;}
+}
+
+/* ---------- Spieleransicht ---------- */
+function renderCard(){
+  const box=$('#cardBox'),b=S.bingo,c=myCard();if(!box||!c)return;
+  const e=evalCard(c,b.drawn),last=b.drawn.length?b.items[b.drawn[b.drawn.length-1]]:null;
+  box.innerHTML=(S.unsaved?'<div class="note">Deine Karte konnte nicht gespeichert werden und geht beim Neuladen verloren.</div>':'')+
+    (e.lines?'<div class="banner">BINGO!'+(e.lines>1?' ×'+e.lines:'')+'</div>':'')+
+    gridHTML(c,b,e,false)+
+    '<p class="progress">'+e.count+' von '+e.total+' abgehakt'+(last?' · zuletzt: <strong>'+esc(last)+'</strong>':'')+'</p>';
+}
+async function joinGame(){
+  const b=S.bingo;if(!b||b.status!=='running')return;
+  const name=($('#jName').value||'').trim().slice(0,30)||'Anonym';
+  try{localStorage.setItem('bingo-name',name);}catch(e){}
+  const card=buildCard(b,name);
+  $('#bJoin').disabled=true;
+  try{await S.db.node('cards/'+S.uid).set(card);}
+  catch(err){S.card=card;S.unsaved=true;toast('Karte konnte nicht gespeichert werden');}
+  refresh();
+}
+
+/* ---------- Admin: Einrichtung ---------- */
+function renderSetup(){
+  const d=S.draft, main=$('#main');
+  main.innerHTML='<section class="panel"><h2>Bingo erstellen</h2>'+
+    '<label>Titel<input type="text" id="fTitle" maxlength="60" placeholder="z. B. Sitzungs-Bingo"></label>'+
+    '<div class="row"><label>Kartengröße<select id="fSize"><option value="3">3 × 3</option><option value="4">4 × 4</option><option value="5">5 × 5</option></select></label>'+
+    '<label class="chk"><input type="checkbox" id="fJoker"> Freifeld in der Mitte (nur ungerade Größen)</label></div>'+
+    '<label>Begriffe (einer pro Zeile)<textarea id="fItems" placeholder="Beamer funktioniert nicht&#10;„Können Sie mich hören?“&#10;…"></textarea></label>'+
+    '<p class="hint" id="fCount"></p>'+
+    '<button class="btn primary" id="bStart">Bingo starten</button><button class="btn" id="bSave">Entwurf speichern</button>'+
+    '<p class="hint">Zum Mitspielen schicken die Teilnehmer einfach den Link dieser Seite weiter. Ein Konto brauchen sie nicht.</p></section>';
+  $('#fTitle').value=d.title;$('#fSize').value=String(d.size);$('#fJoker').checked=d.joker;$('#fItems').value=d.itemsText;
+  const upd=()=>{
+    d.title=$('#fTitle').value;d.size=+$('#fSize').value;d.joker=$('#fJoker').checked;d.itemsText=$('#fItems').value;
+    const odd=d.size%2===1;$('#fJoker').disabled=!odd;
+    const n=parseItems(d.itemsText).length,need=needed(d.size,d.joker);
+    $('#fCount').textContent=n+' Begriffe · für '+d.size+'×'+d.size+(d.joker&&odd?' mit Freifeld':'')+' mindestens '+need+' nötig.'+(n>need?' Mit mehr Begriffen als Feldern bekommt jede Karte eine andere Auswahl.':'');
+    $('#bStart').disabled=n<need;
+  };
+  ['fTitle','fSize','fJoker','fItems'].forEach(id=>$('#'+id).addEventListener('input',upd));
+  $('#fSize').addEventListener('change',upd);
+  upd();
+  $('#bSave').onclick=()=>saveBingo(false);
+  $('#bStart').onclick=()=>saveBingo(true);
+}
+function saveBingo(start){
+  const d=S.draft,items=parseItems(d.itemsText);
+  if(start&&items.length<needed(d.size,d.joker))return;
+  const doc={title:d.title.trim()||'Bingo',size:d.size,joker:d.joker&&d.size%2===1,items,
+             status:start?'running':'setup',round:start?Date.now():0,drawn:[]};
+  S.bingo=normBingo(doc);S.bingoLoaded=true;refresh();
+  enqueue(async()=>{await S.db.node('bingo').set(doc);toast(start?'Bingo gestartet':'Entwurf gespeichert');});
+}
+
+/* ---------- Admin: Live ---------- */
+function renderDrawn(){
+  const b=S.bingo,box=$('#drawn');if(!box||!b)return;
+  const d=new Set(b.drawn);
+  box.innerHTML=b.items.map((t,i)=>'<button data-i="'+i+'" class="'+(d.has(i)?'drawn':'')+'">'+esc(t)+'</button>').join('');
+  const last=b.drawn.length?b.items[b.drawn[b.drawn.length-1]]:null;
+  $('#lMeta').innerHTML=b.drawn.length+' von '+b.items.length+' abgehakt'+(last?' · zuletzt: <strong>'+esc(last)+'</strong>':'');
+}
+function renderPlayers(){
+  const b=S.bingo,box=$('#players');if(!box||!b)return;
+  const rows=S.cards.filter(c=>c.round===b.round&&Array.isArray(c.cells)).map(c=>({c,e:evalCard(c,b.drawn)}))
+    .sort((x,y)=>y.e.lines-x.e.lines||y.e.count-x.e.count||(x.c.name||'').localeCompare(y.c.name||''));
+  $('#pCount').textContent=rows.length?'('+rows.length+')':'';
+  if(!rows.length){box.innerHTML='<p class="hint">Noch niemand hat eine Karte gezogen.</p>';return;}
+  box.innerHTML=rows.map(({c,e})=>
+    '<div class="prow'+(e.lines?' bingo':'')+'"><button class="phead" data-uid="'+esc(c.id)+'"><span class="pname">'+esc(c.name||'Anonym')+'</span>'+
+    '<span class="pbar"><i style="width:'+(e.total?Math.round(100*e.count/e.total):0)+'%"></i></span><span class="pnum">'+e.count+'/'+e.total+'</span>'+
+    (e.lines?'<span class="badge">BINGO'+(e.lines>1?' ×'+e.lines:'')+'</span>':'')+'</button>'+
+    (S.expanded.has(c.id)?gridHTML(c,b,e,true):'')+'</div>').join('');
+}
+function setDrawn(d){
+  S.bingo=Object.assign({},S.bingo,{drawn:d});refresh();
+  enqueue(async()=>{await S.db.node('bingo').update({drawn:d});});
+}
+function toggleDrawn(i){
+  const d=S.bingo.drawn.slice(),k=d.indexOf(i);
+  k>=0?d.splice(k,1):d.push(i);setDrawn(d);
+}
+function drawRandom(){
+  const b=S.bingo,d=new Set(b.drawn),left=b.items.map((_,i)=>i).filter(i=>!d.has(i));
+  if(!left.length){toast('Alle Begriffe sind schon abgehakt');return;}
+  const i=left[Math.floor(Math.random()*left.length)];
+  setDrawn(b.drawn.concat(i));toast('Gezogen: '+b.items[i]);
+}
+let endT;
+function endGame(){
+  const btn=$('#bEnd');
+  if(!S.endArmed){S.endArmed=true;btn.textContent='Wirklich beenden?';clearTimeout(endT);endT=setTimeout(()=>{S.endArmed=false;const x=$('#bEnd');if(x)x.textContent='Bingo beenden';},3500);return;}
+  S.endArmed=false;
+  const b=S.bingo;
+  S.draft={title:b.title,size:b.size,joker:b.joker,itemsText:b.items.join('\n')};
+  const doc={title:b.title,size:b.size,joker:b.joker,items:b.items,status:'setup',round:0,drawn:[]};
+  S.bingo=normBingo(doc);refresh();
+  enqueue(async()=>{await S.db.node('bingo').set(doc);toast('Bingo beendet – du kannst es bearbeiten und neu starten');});
+}
+
+/* ---------- Start ---------- */
+let timer;
+function stopSubs(){S.unsubs.forEach(f=>{try{f();}catch(e){}});S.unsubs=[];}
+function startSubs(){
+  stopSubs();
+  Object.assign(S,{bingoLoaded:false,cardLoaded:false,card:null,cards:[],mode:null,unsaved:false});
+  renderShell();refresh();
+  clearTimeout(timer);
+  timer=setTimeout(()=>{if(S.mode==='load')notice('Die Daten sind gerade nicht erreichbar. Es wird weiter versucht …');},10000);
+  const onErr=e=>{notice('Fehler beim Laden'+(e&&e.code?' ('+e.code+')':'')+'.');};
+  S.unsubs.push(S.db.node('bingo').onSnapshot(snap=>{
+    clearTimeout(timer);notice('');
+    S.bingo=snap.exists?normBingo(snap.data()):null;S.bingoLoaded=true;
+    if(!S.draft)S.draft=S.bingo?{title:S.bingo.title,size:S.bingo.size,joker:!!S.bingo.joker,itemsText:S.bingo.items.join('\n')}:Object.assign({},DEFAULT_DRAFT);
+    refresh();
+  },onErr));
+  S.unsubs.push(S.db.node('cards/'+S.uid).onSnapshot(snap=>{
+    if(!S.unsaved||snap.exists){S.card=snap.exists?snap.data():null;if(snap.exists)S.unsaved=false;}
+    S.cardLoaded=true;refresh();
+  },onErr));
+  if(S.admin){
+    S.unsubs.push(S.db.list('cards',list=>{S.cards=list;if(S.mode==='a-live')renderPlayers();},onErr));
+  }
+}
+function init(){
+  if(firebaseConfig.apiKey.startsWith('DEIN')){
+    $('#main').innerHTML='<section class="panel"><h2>Noch nicht eingerichtet</h2><p class="meta">Trage deine Firebase-Werte oben in <code>index.html</code> ein (Anleitung: README.md).</p></section>';
+    return;
+  }
+  const app=initializeApp(firebaseConfig);
+  S.auth=getAuth(app);S.db=makeDb(getDatabase(app));
+  onAuthStateChanged(S.auth,u=>{
+    if(!u){S.uid=null;S.admin=false;stopSubs();signInAnonymously(S.auth).catch(e=>notice('Anmeldung fehlgeschlagen ('+(e&&e.code||'?')+'). Ist „Anonym“ in Firebase Authentication aktiviert?'));return;}
+    S.uid=u.uid;S.admin=!u.isAnonymous;S.showLogin=false;
+    if(S.admin)S.tab='main';
+    startSubs();
+  });
+}
+renderShell();
+init();
+</script>
+</body>
+</html>
