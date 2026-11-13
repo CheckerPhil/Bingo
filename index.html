@@ -73,6 +73,24 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--red);outline-off
 .chips button:hover{border-color:var(--ink)}
 .chips button.drawn{background:var(--redbg);border-color:var(--red);color:var(--red);text-decoration:line-through;text-decoration-thickness:2px}
 .chips button.drawn::before{content:"✓ ";text-decoration:none;display:inline-block}
+.editpanel{border-top:1.5px solid var(--line);margin-top:14px;padding-top:14px}
+.erow{display:flex;gap:8px;margin-bottom:8px}
+.erow input{margin-top:0}
+.erow .btn{margin:0}
+.playbar{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);margin-bottom:10px}
+.playbar .linkbtn{margin:0}
+.codebox{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin:0 0 14px}
+.code{font-family:Fraunces,Georgia,serif;font-weight:800;font-size:2.1rem;letter-spacing:.18em;line-height:1.1}
+.codebox input{flex:1;min-width:200px;margin:0;font-size:.8rem}
+.grow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding:10px 0}
+.grow:first-child{border-top:0}
+.ginfo{flex:1;min-width:150px}
+.gtitle{font-weight:600}
+.gmeta{font-size:.8rem;color:var(--muted)}
+.gmeta b{letter-spacing:.12em;color:var(--ink)}
+.grow .btn{margin:0}
+.tag{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1.5px solid var(--line);border-radius:99px;padding:1px 8px;color:var(--muted)}
+.tag.run{border-color:var(--red);color:var(--red)}
 .prow{border-top:1px solid var(--line);padding:8px 0}
 .prow:first-child{border-top:0}
 .phead{width:100%;display:flex;align-items:center;gap:12px;background:none;border:0;font:inherit;color:inherit;cursor:pointer;text-align:left;padding:2px 0}
@@ -98,25 +116,30 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--red);outline-off
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,onAuthStateChanged,signInAnonymously,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import {getDatabase,ref,onValue,set,update} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+import {getDatabase,ref,onValue,set,update,get,remove} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
-/* === HIER DEINE FIREBASE-WERTE EINTRAGEN (siehe README.md) === */
+/* === Firebase-Werte === */
 const firebaseConfig = {
-  apiKey: "AIzaSyAro_3QSvtByb5KSewAXRM9p_fYgqLtzus",
-  authDomain: "bingo-cc522.firebaseapp.com",
-  databaseURL: "https://bingo-cc522-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "bingo-cc522",
-  storageBucket: "bingo-cc522.firebasestorage.app",
-  messagingSenderId: "473742430394",
-  appId: "1:473742430394:web:bcadf9deadb756595fb283"
+  apiKey: "__FIREBASE_API_KEY__"   /* wird beim Deploy aus dem GitHub-Secret eingesetzt */,
+  authDomain: "bingo-2e3e7.firebaseapp.com",
+  databaseURL: "https://bingo-2e3e7-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "bingo-2e3e7",
+  storageBucket: "bingo-2e3e7.firebasestorage.app",
+  messagingSenderId: "19570704652",
+  appId: "1:19570704652:web:fcc553be952f281e840929"
 };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S = {db:null, auth:null, uid:null, admin:false, bingo:null, bingoLoaded:false, card:null, cardLoaded:false,
-           cards:[], tab:'main', draft:null, expanded:new Set(), unsaved:false, mode:null, endArmed:false,
-           showLogin:false, unsubs:[]};
-const DEFAULT_DRAFT = {title:'', size:5, joker:true, itemsText:''};
+const S = {
+  db:null, auth:null, uid:null, admin:false, tab:'main', mode:null, showLogin:false,
+  /* Admin */
+  games:{}, gamesLoaded:false, tree:{}, acode:null, creating:false, draft:null, edit:null,
+  expanded:new Set(), endArmed:false, delArmed:null, unsubs:[],
+  /* Spielen */
+  pcode:null, pbingo:null, pLoaded:false, card:null, cardLoaded:false, unsaved:false, punsubs:[]
+};
+const DEFAULT_DRAFT = () => ({title:'', size:5, joker:true, itemsText:''});
 
 /* ---------- Helfer ---------- */
 let toastT;
@@ -127,7 +150,19 @@ function enqueue(fn){q = q.then(fn).catch(e=>toast('Speichern fehlgeschlagen'+(e
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function needed(size,joker){return size*size-((joker&&size%2===1)?1:0);}
 function parseItems(text){const seen=new Set(),out=[];for(const l of text.split('\n')){const t=l.trim().slice(0,80);if(t&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t);}}return out.slice(0,200);}
-function normBingo(v){return v?Object.assign({title:'',size:5,joker:false,status:'setup',round:0},v,{items:v.items||[],drawn:v.drawn||[]}):null;}
+function normBingo(v){return v?Object.assign({title:'',size:5,joker:false,status:'setup',round:0,created:0},v,{items:v.items||[],drawn:v.drawn||[]}):null;}
+
+/* Codes: 6 Zeichen ohne verwechselbare Buchstaben/Ziffern */
+const CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function genCode(){const a=new Uint32Array(6);crypto.getRandomValues(a);return Array.from(a,x=>CODE_CHARS[x%CODE_CHARS.length]).join('');}
+function normCode(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function validCode(c){return c.length===6&&[...c].every(ch=>CODE_CHARS.includes(ch));}
+function linkFor(code){return location.origin+location.pathname+'?code='+code;}
+function initialCode(){
+  try{const c=normCode(new URLSearchParams(location.search).get('code')||location.hash.slice(1));if(validCode(c))return c;}catch(e){}
+  try{const c=normCode(localStorage.getItem('bingo-code'));if(validCode(c))return c;}catch(e){}
+  return null;
+}
 
 /* Joker-Feld = -1 (die Realtime Database speichert keine null-Werte in Listen) */
 function lineSets(n){
@@ -146,7 +181,7 @@ function evalCard(card,drawn){
 }
 function buildCard(b,name){
   const n=b.size,total=n*n,useJoker=b.joker&&n%2===1,need=needed(n,b.joker);
-  const cells=shuffle(b.items.map((_,i)=>i)).slice(0,need);
+  const cells=shuffle(b.items.map((t,i)=>t?i:-1).filter(i=>i>=0)).slice(0,need);
   if(useJoker)cells.splice((total-1)/2,0,-1);
   return {name,size:n,cells,round:b.round,joined:Date.now()};
 }
@@ -158,32 +193,42 @@ function gridHTML(card,b,e,mini){
       return '<div class="cell'+(e.m[i]?' marked':'')+(e.win.has(i)?' win':'')+(joker?' joker':'')+'" title="'+esc(txt)+'"><span>'+esc(txt)+'</span></div>';
     }).join('')+'</div>';
 }
+const gb = () => (S.acode&&S.games[S.acode])||null;           /* verwaltetes Spiel (Admin) */
+const cardsOf = code => Object.entries(S.tree[code]||{}).filter(([,c])=>c&&Array.isArray(c.cells)).map(([id,c])=>Object.assign({},c,{id}));
 
-/* ---------- Datenbank-Adapter (Firebase Realtime Database) ---------- */
+/* ---------- Datenbank-Adapter ---------- */
 function makeDb(fdb){
   return {
     node(path){
       const r=ref(fdb,path);
       return {
         onSnapshot:(next,err)=>onValue(r,s=>next({exists:s.exists(),data:()=>s.val()}),err),
-        set:d=>set(r,d),
-        update:d=>update(r,d)
+        set:d=>set(r,d), update:d=>update(r,d), get:()=>get(r), remove:()=>remove(r)
       };
     },
-    list(path,next,err){
-      return onValue(ref(fdb,path),s=>{const out=[];s.forEach(c=>{out.push(Object.assign({},c.val(),{id:c.key}));});next(out);},err);
-    }
+    tree:(path,next,err)=>onValue(ref(fdb,path),s=>next(s.val()||{}),err)
   };
 }
 
 /* ---------- Modus & Rendering ---------- */
-function myCard(){const c=S.card;return (c&&Array.isArray(c.cells)&&S.bingo&&c.round===S.bingo.round)?c:null;}
+function myCard(){const c=S.card,b=S.pbingo;return (c&&Array.isArray(c.cells)&&b&&c.round===b.round)?c:null;}
 function modeKey(){
   if(S.showLogin)return 'login';
-  if(!S.bingoLoaded||!S.cardLoaded)return 'load';
-  const b=S.bingo, running=b&&b.status==='running';
-  if(S.admin&&S.tab==='main')return running?'a-live':'a-setup';
-  if(!running)return 'p-wait';
+  if(S.admin&&S.tab==='main'){
+    if(!S.gamesLoaded)return 'load';
+    if(S.creating)return 'a-setup';
+    if(S.acode){
+      const g=gb();
+      if(!g){S.acode=null;return 'a-list';}
+      return g.status==='running'?'a-live':'a-setup';
+    }
+    return 'a-list';
+  }
+  if(!S.pcode)return 'p-code';
+  if(!S.pLoaded||!S.cardLoaded)return 'load';
+  const b=S.pbingo;
+  if(!b)return 'p-missing';
+  if(b.status!=='running')return 'p-wait';
   return myCard()?'p-card':'p-join';
 }
 function refresh(){
@@ -191,22 +236,26 @@ function refresh(){
   if(k!==S.mode){S.mode=k;renderMain();}
   else updateParts();
 }
+function rerender(){S.mode=null;refresh();}
 function renderShell(){
   $('#who').innerHTML = S.uid ? '<span class="chip">'+(S.admin?'Admin':'Spieler')+'</span><button class="linkbtn" id="bAuth">'+(S.admin?'Abmelden':'Admin-Login')+'</button>' : '';
-  $('#tabs').innerHTML = S.admin ? '<button data-tab="main" class="'+(S.tab==='main'?'on':'')+'">Verwaltung</button><button data-tab="card" class="'+(S.tab==='card'?'on':'')+'">Meine Karte</button>' : '';
+  $('#tabs').innerHTML = S.admin ? '<button data-tab="main" class="'+(S.tab==='main'?'on':'')+'">Meine Bingos</button><button data-tab="card" class="'+(S.tab==='card'?'on':'')+'">Mitspielen</button>' : '';
   const a=$('#bAuth');
   if(a)a.onclick=()=>{
     if(S.admin){signOut(S.auth);}
-    else{S.showLogin=!S.showLogin;S.mode=null;refresh();}
+    else{S.showLogin=!S.showLogin;rerender();}
   };
 }
 $('#tabs').addEventListener('click',e=>{
   const t=e.target.closest('[data-tab]');if(!t)return;
-  S.tab=t.dataset.tab;S.mode=null;renderShell();refresh();
+  S.tab=t.dataset.tab;renderShell();rerender();
 });
+function playBar(){
+  return '<div class="playbar"><span>Code <strong>'+esc(S.pcode)+'</strong></span><button class="linkbtn" id="bOther">Anderes Spiel</button></div>';
+}
 
 function renderMain(){
-  const main=$('#main'),b=S.bingo;
+  const main=$('#main'),b=S.pbingo;
   switch(S.mode){
     case 'load': main.innerHTML='<p class="hint">Lade …</p>'; break;
     case 'login':
@@ -215,39 +264,71 @@ function renderMain(){
         '<button class="btn primary" id="bLogin">Anmelden</button><button class="btn" id="bCancel">Abbrechen</button></section>';
       $('#bLogin').onclick=doLogin;
       $('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-      $('#bCancel').onclick=()=>{S.showLogin=false;S.mode=null;refresh();};
+      $('#bCancel').onclick=()=>{S.showLogin=false;rerender();};
+      break;
+
+    /* --- Spieler --- */
+    case 'p-code':
+      main.innerHTML='<section class="panel center"><h2>Bingo beitreten</h2><p class="meta">Gib den Code ein, den du vom Admin bekommen hast.</p>'+
+        '<label style="max-width:260px;margin:0 auto 18px;text-align:left">Bingo-Code<input type="text" id="cCode" maxlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:.2em;font-weight:600;text-align:center"></label>'+
+        '<button class="btn primary big" id="bCode">Beitreten</button></section>';
+      $('#bCode').onclick=submitCode;
+      $('#cCode').addEventListener('keydown',e=>{if(e.key==='Enter')submitCode();});
+      break;
+    case 'p-missing':
+      main.innerHTML=playBar()+'<section class="panel center"><h2>Kein Bingo gefunden</h2><p class="meta">Zu diesem Code gibt es kein Spiel. Prüfe den Code oder frage den Admin.</p></section>';
       break;
     case 'p-wait':
-      main.innerHTML='<section class="panel center"><h2>'+(b&&b.title?esc(b.title):'Noch kein Bingo')+'</h2><p class="meta">'+
-        (S.admin?'Starte unter „Verwaltung“ ein Bingo, dann kannst du hier auch selbst mitspielen.':'Das Bingo läuft noch nicht. Diese Seite aktualisiert sich automatisch, sobald der Admin startet.')+'</p></section>';
+      main.innerHTML=playBar()+'<section class="panel center"><h2>'+esc(b.title||'Bingo')+'</h2><p class="meta">Das Bingo läuft noch nicht. Diese Seite aktualisiert sich automatisch, sobald der Admin startet.</p></section>';
       break;
     case 'p-join': {
       const saved=(function(){try{return localStorage.getItem('bingo-name')||'';}catch(e){return '';}})();
-      main.innerHTML='<section class="panel center"><h2>'+esc(b.title||'Bingo')+'</h2><p class="meta">'+b.size+'×'+b.size+' · '+b.items.length+' Begriffe im Topf. Deine Karte wird zufällig aus dem Topf gemischt und gehört dann dir.</p>'+
+      main.innerHTML=playBar()+'<section class="panel center"><h2>'+esc(b.title||'Bingo')+'</h2><p class="meta">'+b.size+'×'+b.size+' · '+b.items.filter(Boolean).length+' Begriffe im Topf. Deine Karte wird zufällig aus dem Topf gemischt und gehört dann dir.</p>'+
         '<label style="max-width:320px;margin:0 auto 18px;text-align:left">Dein Name<input type="text" id="jName" maxlength="30" autocomplete="nickname" value="'+esc(saved)+'"></label>'+
         '<button class="btn primary big" id="bJoin">Karte ziehen</button></section>';
       $('#bJoin').onclick=joinGame;
       $('#jName').addEventListener('keydown',e=>{if(e.key==='Enter')joinGame();});
       break; }
     case 'p-card':
-      main.innerHTML='<section class="panel"><h2 style="text-align:center">'+esc(b.title||'Bingo')+'</h2><div id="cardBox"></div></section>';
+      main.innerHTML=playBar()+'<section class="panel"><h2 style="text-align:center">'+esc(b.title||'Bingo')+'</h2><div id="cardBox"></div></section>';
       renderCard(); break;
+
+    /* --- Admin --- */
+    case 'a-list':
+      main.innerHTML='<section class="panel"><h2>Meine Bingos</h2><p class="hint">Jedes Bingo hat einen eigenen Code. Spieler geben ihn ein oder öffnen den Link. Du kannst beliebig viele Spiele gleichzeitig laufen lassen.</p>'+
+        '<button class="btn primary" id="bNew">Neues Bingo</button><div id="gameList"></div></section>';
+      $('#bNew').onclick=()=>{S.creating=true;S.acode=null;S.draft=DEFAULT_DRAFT();rerender();};
+      $('#gameList').onclick=e=>{
+        const o=e.target.closest('[data-open]'),d=e.target.closest('[data-del]');
+        if(o)openGame(o.dataset.open);
+        else if(d)deleteGame(d.dataset.del);
+      };
+      renderList(); break;
     case 'a-setup': renderSetup(); break;
-    case 'a-live':
-      main.innerHTML='<section class="panel"><h2>'+esc(b.title||'Bingo')+'</h2><div class="meta" id="lMeta"></div>'+
-        '<button class="btn primary" id="bRandom">Zufällig ziehen</button><button class="btn warn" id="bEnd">Bingo beenden</button>'+
+    case 'a-live': {
+      const g=gb();
+      main.innerHTML='<button class="linkbtn" id="bBack" style="margin:0 0 10px">← Alle Bingos</button>'+
+        '<section class="panel"><h2>'+esc(g.title||'Bingo')+'</h2>'+codeBox()+'<div class="meta" id="lMeta"></div>'+
+        '<button class="btn primary" id="bRandom">Zufällig ziehen</button><button class="btn" id="bEdit">Bingo bearbeiten</button><button class="btn warn" id="bEnd">Bingo beenden</button>'+
+        '<div id="editBox"></div>'+
         '<p class="hint">Begriff antippen = abhaken, nochmal antippen = zurücknehmen. Die Karten der Spieler aktualisieren sich sofort.</p>'+
         '<div class="chips" id="drawn"></div></section>'+
         '<section class="panel"><h3>Spieler <span id="pCount"></span></h3><div id="players"></div></section>';
+      $('#bBack').onclick=backToList;
+      wireCodeBox();
       $('#bRandom').onclick=drawRandom;
       $('#bEnd').onclick=endGame;
+      $('#bEdit').onclick=toggleEdit;
+      wireEdit();
       $('#drawn').onclick=e=>{const t=e.target.closest('[data-i]');if(t)toggleDrawn(+t.dataset.i);};
       $('#players').onclick=e=>{const t=e.target.closest('[data-uid]');if(!t)return;const id=t.dataset.uid;S.expanded.has(id)?S.expanded.delete(id):S.expanded.add(id);renderPlayers();};
-      renderDrawn();renderPlayers(); break;
+      renderDrawn();renderPlayers(); break; }
   }
+  const o=$('#bOther');if(o)o.onclick=()=>setPlayCode(null);
 }
 function updateParts(){
   if(S.mode==='a-live'){renderDrawn();renderPlayers();}
+  else if(S.mode==='a-list')renderList();
   else if(S.mode==='p-card')renderCard();
 }
 async function doLogin(){
@@ -258,9 +339,31 @@ async function doLogin(){
   catch(e){toast('Login fehlgeschlagen'+(e&&e.code?' ('+e.code.replace('auth/','')+')':''));const b=$('#bLogin');if(b)b.disabled=false;}
 }
 
-/* ---------- Spieleransicht ---------- */
+/* ---------- Spielen: Code, Karte ---------- */
+function setPlayCode(code){
+  S.punsubs.forEach(f=>{try{f();}catch(e){}});S.punsubs=[];
+  Object.assign(S,{pcode:code||null,pbingo:null,pLoaded:false,cardLoaded:false,card:null,unsaved:false});
+  try{code?localStorage.setItem('bingo-code',code):localStorage.removeItem('bingo-code');}catch(e){}
+  try{history.replaceState(null,'',location.pathname+(code?'?code='+code:''));}catch(e){}
+  if(code&&S.uid){
+    const onErr=e=>notice('Fehler beim Laden'+(e&&e.code?' ('+e.code+')':'')+'.');
+    S.punsubs.push(S.db.node('games/'+code).onSnapshot(snap=>{
+      S.pbingo=snap.exists?normBingo(snap.data()):null;S.pLoaded=true;refresh();
+    },onErr));
+    S.punsubs.push(S.db.node('cards/'+code+'/'+S.uid).onSnapshot(snap=>{
+      if(!S.unsaved||snap.exists){S.card=snap.exists?snap.data():null;if(snap.exists)S.unsaved=false;}
+      S.cardLoaded=true;refresh();
+    },onErr));
+  }
+  rerender();
+}
+function submitCode(){
+  const c=normCode($('#cCode').value);
+  if(!validCode(c)){toast('Der Code besteht aus 6 Zeichen.');return;}
+  setPlayCode(c);
+}
 function renderCard(){
-  const box=$('#cardBox'),b=S.bingo,c=myCard();if(!box||!c)return;
+  const box=$('#cardBox'),b=S.pbingo,c=myCard();if(!box||!c)return;
   const e=evalCard(c,b.drawn),last=b.drawn.length?b.items[b.drawn[b.drawn.length-1]]:null;
   box.innerHTML=(S.unsaved?'<div class="note">Deine Karte konnte nicht gespeichert werden und geht beim Neuladen verloren.</div>':'')+
     (e.lines?'<div class="banner">BINGO!'+(e.lines>1?' ×'+e.lines:'')+'</div>':'')+
@@ -268,27 +371,74 @@ function renderCard(){
     '<p class="progress">'+e.count+' von '+e.total+' abgehakt'+(last?' · zuletzt: <strong>'+esc(last)+'</strong>':'')+'</p>';
 }
 async function joinGame(){
-  const b=S.bingo;if(!b||b.status!=='running')return;
+  const b=S.pbingo;if(!b||b.status!=='running')return;
   const name=($('#jName').value||'').trim().slice(0,30)||'Anonym';
   try{localStorage.setItem('bingo-name',name);}catch(e){}
   const card=buildCard(b,name);
   $('#bJoin').disabled=true;
-  try{await S.db.node('cards/'+S.uid).set(card);}
+  try{await S.db.node('cards/'+S.pcode+'/'+S.uid).set(card);}
   catch(err){S.card=card;S.unsaved=true;toast('Karte konnte nicht gespeichert werden');}
   refresh();
+}
+
+/* ---------- Admin: Liste ---------- */
+function openGame(code){
+  const g=S.games[code];if(!g)return;
+  S.acode=code;S.creating=false;S.edit=null;S.expanded=new Set();
+  S.draft={title:g.title,size:g.size,joker:!!g.joker,itemsText:g.items.filter(Boolean).join('\n')};
+  rerender();
+}
+function backToList(){S.acode=null;S.creating=false;S.edit=null;rerender();}
+let delT;
+function deleteGame(code){
+  if(S.delArmed!==code){
+    S.delArmed=code;renderList();clearTimeout(delT);delT=setTimeout(()=>{S.delArmed=null;if(S.mode==='a-list')renderList();},3500);return;
+  }
+  S.delArmed=null;
+  delete S.games[code];refresh();
+  enqueue(async()=>{await S.db.node('games/'+code).remove();await S.db.node('cards/'+code).remove();toast('Bingo gelöscht');});
+}
+function renderList(){
+  const box=$('#gameList');if(!box)return;
+  const list=Object.entries(S.games).map(([code,g])=>({code,g})).sort((a,b)=>(b.g.created||0)-(a.g.created||0));
+  if(!list.length){box.innerHTML='<p class="hint" style="margin-top:14px">Noch kein Bingo angelegt.</p>';return;}
+  box.innerHTML='<div style="margin-top:14px">'+list.map(({code,g})=>{
+    const running=g.status==='running',n=running?cardsOf(code).filter(c=>c.round===g.round).length:0;
+    return '<div class="grow"><div class="ginfo"><div class="gtitle">'+esc(g.title||'Bingo')+'</div>'+
+      '<div class="gmeta">Code <b>'+esc(code)+'</b> · '+g.size+'×'+g.size+(running?' · '+n+' Spieler':'')+'</div></div>'+
+      '<span class="tag'+(running?' run':'')+'">'+(running?'läuft':'Entwurf')+'</span>'+
+      '<button class="btn" data-open="'+esc(code)+'">Öffnen</button>'+
+      '<button class="btn warn" data-del="'+esc(code)+'">'+(S.delArmed===code?'Wirklich löschen?':'Löschen')+'</button></div>';
+  }).join('')+'</div>';
+}
+function codeBox(){
+  const c=S.acode;if(!c)return '';
+  return '<div class="codebox"><div><div class="gmeta">Bingo-Code</div><div class="code">'+esc(c)+'</div></div>'+
+    '<input type="text" readonly id="lLink" value="'+esc(linkFor(c))+'"><button class="btn" id="bCopy" style="margin:0">Link kopieren</button></div>';
+}
+function wireCodeBox(){
+  const b=$('#bCopy');if(!b)return;
+  b.onclick=async()=>{
+    const l=$('#lLink');
+    try{await navigator.clipboard.writeText(l.value);toast('Link kopiert');}
+    catch(e){l.select();toast('Link markiert – bitte mit Strg+C kopieren');}
+  };
 }
 
 /* ---------- Admin: Einrichtung ---------- */
 function renderSetup(){
   const d=S.draft, main=$('#main');
-  main.innerHTML='<section class="panel"><h2>Bingo erstellen</h2>'+
+  main.innerHTML='<button class="linkbtn" id="bBack" style="margin:0 0 10px">← Alle Bingos</button>'+
+    '<section class="panel"><h2>'+(S.creating?'Neues Bingo':'Bingo bearbeiten')+'</h2>'+codeBox()+
     '<label>Titel<input type="text" id="fTitle" maxlength="60" placeholder="z. B. Sitzungs-Bingo"></label>'+
     '<div class="row"><label>Kartengröße<select id="fSize"><option value="3">3 × 3</option><option value="4">4 × 4</option><option value="5">5 × 5</option></select></label>'+
     '<label class="chk"><input type="checkbox" id="fJoker"> Freifeld in der Mitte (nur ungerade Größen)</label></div>'+
     '<label>Begriffe (einer pro Zeile)<textarea id="fItems" placeholder="Beamer funktioniert nicht&#10;„Können Sie mich hören?“&#10;…"></textarea></label>'+
     '<p class="hint" id="fCount"></p>'+
     '<button class="btn primary" id="bStart">Bingo starten</button><button class="btn" id="bSave">Entwurf speichern</button>'+
-    '<p class="hint">Zum Mitspielen schicken die Teilnehmer einfach den Link dieser Seite weiter. Ein Konto brauchen sie nicht.</p></section>';
+    '<p class="hint">'+(S.creating?'Den Code für die Spieler bekommst du, sobald du speicherst oder startest.':'Gib den Code oder den Link an die Teilnehmer weiter. Ein Konto brauchen sie nicht.')+'</p></section>';
+  $('#bBack').onclick=backToList;
+  wireCodeBox();
   $('#fTitle').value=d.title;$('#fSize').value=String(d.size);$('#fJoker').checked=d.joker;$('#fItems').value=d.itemsText;
   const upd=()=>{
     d.title=$('#fTitle').value;d.size=+$('#fSize').value;d.joker=$('#fJoker').checked;d.itemsText=$('#fItems').value;
@@ -307,22 +457,36 @@ function saveBingo(start){
   const d=S.draft,items=parseItems(d.itemsText);
   if(start&&items.length<needed(d.size,d.joker))return;
   const doc={title:d.title.trim()||'Bingo',size:d.size,joker:d.joker&&d.size%2===1,items,
-             status:start?'running':'setup',round:start?Date.now():0,drawn:[]};
-  S.bingo=normBingo(doc);S.bingoLoaded=true;refresh();
-  enqueue(async()=>{await S.db.node('bingo').set(doc);toast(start?'Bingo gestartet':'Entwurf gespeichert');});
+             status:start?'running':'setup',round:start?Date.now():0,drawn:[],created:Date.now()};
+  if(S.creating){
+    $('#bStart').disabled=true;$('#bSave').disabled=true;
+    enqueue(async()=>{
+      let code=null;
+      for(let i=0;i<6&&!code;i++){const c=genCode();if(!(await S.db.node('games/'+c).get()).exists())code=c;}
+      if(!code)throw new Error('Kein freier Code');
+      await S.db.node('games/'+code).set(doc);
+      S.games[code]=normBingo(doc);S.creating=false;S.acode=code;rerender();
+      toast(start?'Bingo gestartet':'Entwurf gespeichert');
+    });
+  }else{
+    const g=gb();doc.created=g.created||doc.created;
+    const code=S.acode;
+    S.games[code]=normBingo(doc);rerender();
+    enqueue(async()=>{await S.db.node('games/'+code).set(doc);toast(start?'Bingo gestartet':'Entwurf gespeichert');});
+  }
 }
 
 /* ---------- Admin: Live ---------- */
 function renderDrawn(){
-  const b=S.bingo,box=$('#drawn');if(!box||!b)return;
+  const b=gb(),box=$('#drawn');if(!box||!b)return;
   const d=new Set(b.drawn);
-  box.innerHTML=b.items.map((t,i)=>'<button data-i="'+i+'" class="'+(d.has(i)?'drawn':'')+'">'+esc(t)+'</button>').join('');
+  box.innerHTML=b.items.map((t,i)=>t?'<button data-i="'+i+'" class="'+(d.has(i)?'drawn':'')+'">'+esc(t)+'</button>':'').join('');
   const last=b.drawn.length?b.items[b.drawn[b.drawn.length-1]]:null;
-  $('#lMeta').innerHTML=b.drawn.length+' von '+b.items.length+' abgehakt'+(last?' · zuletzt: <strong>'+esc(last)+'</strong>':'');
+  $('#lMeta').innerHTML=b.drawn.length+' von '+b.items.filter(Boolean).length+' abgehakt'+(last?' · zuletzt: <strong>'+esc(last)+'</strong>':'');
 }
 function renderPlayers(){
-  const b=S.bingo,box=$('#players');if(!box||!b)return;
-  const rows=S.cards.filter(c=>c.round===b.round&&Array.isArray(c.cells)).map(c=>({c,e:evalCard(c,b.drawn)}))
+  const b=gb(),box=$('#players');if(!box||!b)return;
+  const rows=cardsOf(S.acode).filter(c=>c.round===b.round).map(c=>({c,e:evalCard(c,b.drawn)}))
     .sort((x,y)=>y.e.lines-x.e.lines||y.e.count-x.e.count||(x.c.name||'').localeCompare(y.c.name||''));
   $('#pCount').textContent=rows.length?'('+rows.length+')':'';
   if(!rows.length){box.innerHTML='<p class="hint">Noch niemand hat eine Karte gezogen.</p>';return;}
@@ -333,15 +497,16 @@ function renderPlayers(){
     (S.expanded.has(c.id)?gridHTML(c,b,e,true):'')+'</div>').join('');
 }
 function setDrawn(d){
-  S.bingo=Object.assign({},S.bingo,{drawn:d});refresh();
-  enqueue(async()=>{await S.db.node('bingo').update({drawn:d});});
+  const code=S.acode;
+  S.games[code]=Object.assign({},S.games[code],{drawn:d});refresh();
+  enqueue(async()=>{await S.db.node('games/'+code).update({drawn:d});});
 }
 function toggleDrawn(i){
-  const d=S.bingo.drawn.slice(),k=d.indexOf(i);
+  const d=gb().drawn.slice(),k=d.indexOf(i);
   k>=0?d.splice(k,1):d.push(i);setDrawn(d);
 }
 function drawRandom(){
-  const b=S.bingo,d=new Set(b.drawn),left=b.items.map((_,i)=>i).filter(i=>!d.has(i));
+  const b=gb(),d=new Set(b.drawn),left=b.items.map((t,i)=>i).filter(i=>b.items[i]&&!d.has(i));
   if(!left.length){toast('Alle Begriffe sind schon abgehakt');return;}
   const i=left[Math.floor(Math.random()*left.length)];
   setDrawn(b.drawn.concat(i));toast('Gezogen: '+b.items[i]);
@@ -351,49 +516,116 @@ function endGame(){
   const btn=$('#bEnd');
   if(!S.endArmed){S.endArmed=true;btn.textContent='Wirklich beenden?';clearTimeout(endT);endT=setTimeout(()=>{S.endArmed=false;const x=$('#bEnd');if(x)x.textContent='Bingo beenden';},3500);return;}
   S.endArmed=false;
-  const b=S.bingo;
-  S.draft={title:b.title,size:b.size,joker:b.joker,itemsText:b.items.join('\n')};
-  const doc={title:b.title,size:b.size,joker:b.joker,items:b.items,status:'setup',round:0,drawn:[]};
-  S.bingo=normBingo(doc);refresh();
-  enqueue(async()=>{await S.db.node('bingo').set(doc);toast('Bingo beendet – du kannst es bearbeiten und neu starten');});
+  const b=gb(),code=S.acode;
+  S.draft={title:b.title,size:b.size,joker:b.joker,itemsText:b.items.filter(Boolean).join('\n')};
+  const doc={title:b.title,size:b.size,joker:b.joker,items:b.items.filter(Boolean),status:'setup',round:0,drawn:[],created:b.created||Date.now()};
+  S.games[code]=normBingo(doc);S.edit=null;rerender();
+  enqueue(async()=>{await S.db.node('games/'+code).set(doc);toast('Bingo beendet – du kannst es bearbeiten und neu starten');});
+}
+
+/* ---------- Admin: laufendes Bingo bearbeiten ---------- */
+function toggleEdit(){
+  if(S.edit){S.edit=null;renderEdit();return;}
+  const b=gb();
+  S.edit={title:b.title,items:b.items.map((t,i)=>({t,orig:i,removed:false})).filter(x=>x.t)};
+  renderEdit();
+}
+function renderEdit(){
+  const box=$('#editBox');if(!box)return;
+  const e=S.edit;
+  if(!e){box.innerHTML='';return;}
+  box.innerHTML='<div class="editpanel"><label>Titel<input type="text" id="eTitle" maxlength="60"></label>'+
+    '<label>Begriffe</label><div id="eItems">'+
+    e.items.map((x,i)=>x.removed?'':'<div class="erow"><input type="text" data-ei="'+i+'" maxlength="80"><button class="btn" data-del="'+i+'" title="Entfernen" aria-label="Entfernen">×</button></div>').join('')+'</div>'+
+    '<div class="erow"><input type="text" id="eNew" maxlength="80" placeholder="Neuer Begriff …"><button class="btn" id="eAdd">Hinzufügen</button></div>'+
+    '<p class="hint" id="eHint">Umbenennen ist jederzeit möglich. Neue Begriffe erscheinen nur auf Karten, die erst danach gezogen werden. Entfernen geht nur für Begriffe, die auf keiner Karte stehen und noch nicht abgehakt sind.</p>'+
+    '<button class="btn primary" id="eSave">Änderungen speichern</button><button class="btn" id="eCancel">Abbrechen</button></div>';
+  $('#eTitle').value=e.title;
+  box.querySelectorAll('[data-ei]').forEach(inp=>{inp.value=e.items[+inp.dataset.ei].t;});
+}
+function wireEdit(){
+  const box=$('#editBox');
+  box.oninput=ev=>{
+    const t=ev.target;if(!S.edit)return;
+    if(t.id==='eTitle')S.edit.title=t.value;
+    else if(t.dataset.ei!=null)S.edit.items[+t.dataset.ei].t=t.value;
+  };
+  box.onclick=ev=>{
+    const t=ev.target.closest('button');if(!t||!S.edit)return;
+    if(t.dataset.del!=null){S.edit.items[+t.dataset.del].removed=true;renderEdit();}
+    else if(t.id==='eAdd')addEditItem();
+    else if(t.id==='eSave')saveEdit();
+    else if(t.id==='eCancel'){S.edit=null;renderEdit();}
+  };
+  box.onkeydown=ev=>{if(ev.key==='Enter'&&ev.target.id==='eNew'){ev.preventDefault();addEditItem();}};
+}
+function addEditItem(){
+  const inp=$('#eNew'),t=inp.value.trim().slice(0,80);
+  if(!t)return;
+  S.edit.items.push({t,orig:null,removed:false});
+  renderEdit();$('#eNew').focus();
+}
+function saveEdit(){
+  const e=S.edit,b=gb(),code=S.acode,hint=$('#eHint');
+  const used=new Set(b.drawn);
+  cardsOf(code).filter(c=>c.round===b.round).forEach(c=>c.cells.forEach(x=>{if(x>=0)used.add(x);}));
+  const items=b.items.slice(),blocked=[];
+  e.items.forEach(x=>{
+    if(x.orig==null)return;
+    const t=x.removed?'':x.t.trim().slice(0,80);
+    if(!t&&used.has(x.orig)){blocked.push(b.items[x.orig]);return;}
+    items[x.orig]=t;
+  });
+  if(blocked.length){hint.innerHTML='<strong>Nicht entfernbar</strong> (steht auf Karten oder ist abgehakt): '+blocked.map(esc).join(', ');return;}
+  e.items.forEach(x=>{if(x.orig==null&&!x.removed){const t=x.t.trim().slice(0,80);if(t)items.push(t);}});
+  const need=needed(b.size,b.joker);
+  if(items.filter(Boolean).length<need){hint.innerHTML='<strong>Zu wenige Begriffe:</strong> mindestens '+need+' nötig.';return;}
+  const title=(e.title||'').trim().slice(0,60)||'Bingo';
+  S.games[code]=Object.assign({},b,{title,items});
+  S.edit=null;rerender();
+  enqueue(async()=>{await S.db.node('games/'+code).update({title,items});toast('Änderungen gespeichert');});
 }
 
 /* ---------- Start ---------- */
-let timer;
-function stopSubs(){S.unsubs.forEach(f=>{try{f();}catch(e){}});S.unsubs=[];}
-function startSubs(){
-  stopSubs();
-  Object.assign(S,{bingoLoaded:false,cardLoaded:false,card:null,cards:[],mode:null,unsaved:false});
-  renderShell();refresh();
+let timer,firstSession=true;
+function startSession(){
+  S.unsubs.forEach(f=>{try{f();}catch(e){}});S.unsubs=[];
+  Object.assign(S,{games:{},tree:{},gamesLoaded:!S.admin,acode:null,creating:false,edit:null,draft:null,tab:'main',showLogin:false});
+  renderShell();
+  const onErr=e=>{notice('Fehler beim Laden'+(e&&e.code?' ('+e.code+')':'')+'.');};
   clearTimeout(timer);
   timer=setTimeout(()=>{if(S.mode==='load')notice('Die Daten sind gerade nicht erreichbar. Es wird weiter versucht …');},10000);
-  const onErr=e=>{notice('Fehler beim Laden'+(e&&e.code?' ('+e.code+')':'')+'.');};
-  S.unsubs.push(S.db.node('bingo').onSnapshot(snap=>{
-    clearTimeout(timer);notice('');
-    S.bingo=snap.exists?normBingo(snap.data()):null;S.bingoLoaded=true;
-    if(!S.draft)S.draft=S.bingo?{title:S.bingo.title,size:S.bingo.size,joker:!!S.bingo.joker,itemsText:S.bingo.items.join('\n')}:Object.assign({},DEFAULT_DRAFT);
-    refresh();
-  },onErr));
-  S.unsubs.push(S.db.node('cards/'+S.uid).onSnapshot(snap=>{
-    if(!S.unsaved||snap.exists){S.card=snap.exists?snap.data():null;if(snap.exists)S.unsaved=false;}
-    S.cardLoaded=true;refresh();
-  },onErr));
   if(S.admin){
-    S.unsubs.push(S.db.list('cards',list=>{S.cards=list;if(S.mode==='a-live')renderPlayers();},onErr));
+    S.unsubs.push(S.db.tree('games',obj=>{
+      clearTimeout(timer);notice('');
+      S.games={};Object.keys(obj).forEach(k=>{S.games[k]=normBingo(obj[k]);});
+      S.gamesLoaded=true;refresh();
+    },onErr));
+    S.unsubs.push(S.db.tree('cards',obj=>{
+      S.tree=obj;
+      if(S.mode==='a-live')renderPlayers();else if(S.mode==='a-list')renderList();
+    },onErr));
   }
+  const code=firstSession?initialCode():S.pcode;firstSession=false;
+  setPlayCode(code);
 }
 function init(){
-  if(firebaseConfig.apiKey.startsWith('DEIN')){
-    $('#main').innerHTML='<section class="panel"><h2>Noch nicht eingerichtet</h2><p class="meta">Trage deine Firebase-Werte oben in <code>index.html</code> ein (Anleitung: README.md).</p></section>';
+  if(/^(DEIN|__)/.test(firebaseConfig.apiKey)){
+    $('#main').innerHTML='<section class="panel"><h2>Noch nicht eingerichtet</h2><p class="meta">Der Firebase-Key fehlt. Beim Deploy wird er aus dem GitHub-Secret FIREBASE_API_KEY eingesetzt (Anleitung: README.md).</p></section>';
     return;
   }
   const app=initializeApp(firebaseConfig);
   S.auth=getAuth(app);S.db=makeDb(getDatabase(app));
   onAuthStateChanged(S.auth,u=>{
-    if(!u){S.uid=null;S.admin=false;stopSubs();signInAnonymously(S.auth).catch(e=>notice('Anmeldung fehlgeschlagen ('+(e&&e.code||'?')+'). Ist „Anonym“ in Firebase Authentication aktiviert?'));return;}
-    S.uid=u.uid;S.admin=!u.isAnonymous;S.showLogin=false;
-    if(S.admin)S.tab='main';
-    startSubs();
+    if(!u){
+      S.uid=null;S.admin=false;
+      S.unsubs.forEach(f=>{try{f();}catch(e){}});S.unsubs=[];
+      S.punsubs.forEach(f=>{try{f();}catch(e){}});S.punsubs=[];
+      signInAnonymously(S.auth).catch(e=>notice('Anmeldung fehlgeschlagen ('+(e&&e.code||'?')+'). Ist „Anonym“ in Firebase Authentication aktiviert?'));
+      return;
+    }
+    S.uid=u.uid;S.admin=!u.isAnonymous;
+    startSession();
   });
 }
 renderShell();

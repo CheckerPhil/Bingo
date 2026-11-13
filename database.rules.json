@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "games": {
+      ".read": "auth != null && auth.uid === 'ADMIN_UID'",
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === 'ADMIN_UID'"
+      }
+    },
+    "cards": {
+      ".read": "auth != null && auth.uid === 'ADMIN_UID'",
+      ".write": "auth != null && auth.uid === 'ADMIN_UID'",
+      "$code": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && root.child('games').child($code).exists()",
+          ".validate": "newData.hasChildren(['name','size','cells','round']) && newData.child('name').isString() && newData.child('name').val().length <= 30"
+        }
+      }
+    }
+  }
+}
